@@ -19,13 +19,12 @@ class TransactionFactory extends Factory
     {
         $date = date('Y-m-d');
         $type = TransactionType::query()->inRandomOrder()->first();
-        // $code = fake()->randomElement(['TO', 'TR']) . str_replace('-', '', $date) . fake()->numberBetween(1000000, 9999999);
         $code = $type->code . str_replace('-', '', $date) . fake()->numberBetween(1000000, 9999999);
 
         return [
             'code' => $code,
             'ammount' => fake()->randomFloat(2, 0, 9999999),
-            'note' => fake()->word(10),
+            'note' => fake()->paragraph(1),
             'image' => $type->has_image == true ? fake()->imageUrl() : null,
             'transaction_type_id' => $type->id,
         ];

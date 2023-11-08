@@ -31,11 +31,11 @@ class Transaction extends Model
     protected $hidden = ['created_at', 'updated_at'];
 
     /**
-     * Get the transation_type that owns the Transaction
+     * Get the transaction_type that owns the Transaction
      *
      * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
      */
-    public function transation_type(): BelongsTo
+    public function transaction_type(): BelongsTo
     {
         return $this->belongsTo(TransactionType::class, 'transaction_type_id', 'id');
     }
@@ -48,5 +48,10 @@ class Transaction extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id', 'id');
+    }
+
+    public function scopeType($query, $param)
+    {
+        return $query->whereRelation('transaction_type', 'type', $param);
     }
 }
