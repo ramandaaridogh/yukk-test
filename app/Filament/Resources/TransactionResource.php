@@ -5,6 +5,7 @@ namespace App\Filament\Resources;
 use App\Enums\Type;
 use App\Filament\Resources\TransactionResource\Pages;
 use App\Filament\Resources\TransactionResource\RelationManagers;
+use App\Models\Scopes\IsActiveScope;
 use App\Models\Transaction;
 use App\Models\TransactionType;
 use App\Models\User;
@@ -17,6 +18,11 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Form;
 use Filament\Forms\Get;
 use Filament\Forms\Set;
+use Filament\Infolists\Components\Fieldset;
+use Filament\Infolists\Components\ImageEntry;
+use Filament\Infolists\Components\Section;
+use Filament\Infolists\Components\TextEntry;
+use Filament\Infolists\Infolist;
 use Filament\Resources\Resource;
 use Filament\Support\Enums\FontFamily;
 use Filament\Tables;
@@ -54,14 +60,16 @@ class TransactionResource extends Resource
 		return parent::getEloquentQuery()
 		->with([
 			'transaction_type',
-			'user',
+			'user' => function ($q) {
+                $q->withoutGlobalScopes([IsActiveScope::class]);
+            },
 		])
 		->orderByDesc('id');
 	}
 
 	public static function form(Form $form): Form
 	{
-		$date = str_replace('-', '', date('Y-m-d')) . fake()->numberBetween(1000000, 9999999);
+		$date = str_replace('-', '', date('Y-m-d')) . fake()->unique()->numberBetween(1000000, 9999999);
 		return $form
 			->schema([
 				Select::make('transaction_type_id')
@@ -206,6 +214,7 @@ class TransactionResource extends Resource
 			])
 			->actions([
 				// Tables\Actions\EditAction::make(),
+				Tables\Actions\ViewAction::make()->color('info'),
 			])
 			->bulkActions([
 				Tables\Actions\BulkActionGroup::make([
@@ -214,6 +223,52 @@ class TransactionResource extends Resource
 			])
 			->emptyStateActions([
 				Tables\Actions\CreateAction::make(),
+			]);
+	}
+
+	public static function infolist(Infolist $infolist): Infolist
+	{
+		return $infolist
+			->schema([
+				Fieldset::make('Detail User')
+				->schema([
+					TextEntry::make('user.username')->label('Username'),
+					TextEntry::make('user.name')->label('Name'),
+					TextEntry::make('user.email')->label('Email'),
+					TextEntry::make('user.phone_number')->label('Phone Number'),
+				])->columns(2),
+				Fieldset::make('Type & Code')
+				->schema([
+					TextEntry::make('transaction_type.name'),
+					TextEntry::make('transaction_type.type')
+					->badge()
+                    ->formatStateUsing(fn (Type $state): string => match ($state->value) {
+						'in' => 'Incoming transaction : in',
+						'out' => 'Outgoing transactions : out',
+					})
+					->color(fn (Type $state): string => match ($state->value) {
+						'in' => 'success',
+						'out' => 'danger',
+					}),
+					TextEntry::make('code')
+                        ->fontFamily(FontFamily::Mono)
+                        ->copyable()
+                        ->copyMessage('Transaction Code copied')
+                        ->copyMessageDuration(1500),
+				])->columns(3),
+				Fieldset::make('User Balance History')
+				->schema([
+					TextEntry::make('ammount')
+                        ->formatStateUsing(fn ($state) => 'Rp. ' . number_format($state, 2, ', ', '.')),
+					ImageEntry::make('image')
+                        ->label('Image of Transaction')
+                        ->disk('filament'),
+				])->columns(2),
+				Fieldset::make('Transaction Date')
+				->schema([
+					TextEntry::make('created_at')->dateTime(),
+					TextEntry::make('updated_at')->dateTime(),
+				]),
 			]);
 	}
 

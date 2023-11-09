@@ -28,7 +28,7 @@ class UserFactory extends Factory
             'email'     => fake()->unique()->email(),
             'password'      => 'password',
             'pin' => null,
-            'ammount_balance' => fake()->randomFloat(2, 0, 9999999),
+            'ammount_balance' => 0,
             'birth_date'        => fake()->date(),
             'phone_number' => '08' . fake()->unique()->numberBetween(1000000000, 9999999999),
             'gender' => fake()->randomElement(Gender::class),

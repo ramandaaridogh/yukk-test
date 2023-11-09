@@ -9,7 +9,10 @@ use App\Filament\Resources\UserResource\RelationManagers;
 use App\Models\Scopes\IsActiveScope;
 use App\Models\Transaction;
 use App\Models\User;
+use Faker\Core\Uuid;
 use Filament\Forms;
+use Filament\Forms\Components\FileUpload;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Form;
 use Filament\Infolists\Components\Fieldset;
@@ -30,6 +33,9 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rules\Password;
+use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 
 class UserResource extends Resource
 {
@@ -53,31 +59,45 @@ class UserResource extends Resource
 
 	public static function form(Form $form): Form
 	{
+		$date = str_replace('-', '', date('Y-m-d')) . fake()->unique()->numberBetween(1000000, 9999999);
 		return $form
 			->schema([
 				Forms\Components\TextInput::make('username')
 					->required()
 					->unique(ignorable: fn ($record) => $record)
 					->maxLength(255),
-				Forms\Components\TextInput::make('name')
-					->required()
-					->maxLength(255),
 				Forms\Components\TextInput::make('email')
 					->unique(ignorable: fn ($record) => $record)
 					->email()
 					->required()
 					->maxLength(255),
+				Forms\Components\TextInput::make('name')
+					->required()
+					->maxLength(255),
+				Forms\Components\DatePicker::make('birth_date')
+					->required(),
 				Forms\Components\TextInput::make('password')
 					->password()
 					->required()
-					->maxLength(255),
-				Forms\Components\TextInput::make('pin')
-					->maxLength(255),
-				Forms\Components\TextInput::make('ammount_balance')
+					->rule(Password::default())
+					->dehydrateStateUsing(fn ($state) => Hash::make($state))
+					->same('passwordConfirmation')
+					->minLength(8)
+					->visible(fn (string $context): bool => $context === 'create'),
+				Forms\Components\TextInput::make('passwordConfirmation')
+					->label('Password Confirmation')
+					->password()
 					->required()
-					->numeric(),
-				Forms\Components\DatePicker::make('birth_date')
-					->required(),
+					->dehydrated(false)
+					->visible(fn (string $context): bool => $context === 'create'),
+				Hidden::make('pin')
+					->default(''),
+				Hidden::make('ammount_balance')
+					->default(0),
+				Hidden::make('is_active')
+					->default(true),
+				Hidden::make('email_verified_at')
+					->default(now()),
 				Forms\Components\TextInput::make('phone_number')
 					->unique(ignorable: fn ($record) => $record)
 					->tel()
@@ -94,11 +114,16 @@ class UserResource extends Resource
 				Forms\Components\Textarea::make('address')
 					->required()
 					->columnSpanFull(),
-				Forms\Components\Textarea::make('image')
+				FileUpload::make('image')
+					->image()
+					->disk('filament')
+					->directory('')
+					->maxSize(1024)
+					->getUploadedFileNameForStorageUsing(
+						fn (TemporaryUploadedFile $file): string
+						=> (string) str("image-" . $date . '-' . time() . Uuid::uuid4(). '.' . $file->getClientOriginalExtension())->prepend('user-'),
+					)
 					->columnSpanFull(),
-				Forms\Components\Toggle::make('is_active')
-					->required(),
-				Forms\Components\DateTimePicker::make('email_verified_at'),
 			]);
 	}
 
@@ -209,107 +234,109 @@ class UserResource extends Resource
 					TextEntry::make('name')->label('Name'),
 					TextEntry::make('email')->label('Email'),
 				])->columns(3),
-                Section::make('User Transaction History')
-                ->description('History of detailed user log transactions')
-                ->schema([
-                    Tabs::make('Label')
-                    ->tabs([
-                        Tabs\Tab::make('Incoming Transactions')
-                            ->icon('heroicon-m-arrow-trending-up')
-                            ->iconPosition(IconPosition::After)
-                            // ->getEloquentQuery(fn (Builder $builder) => $builder->whereRelation('transaction_type', 'type', 'in'))
-                            ->schema([
-                                RepeatableEntry::make('in_transactions')
-                                ->label('Transaction Logs')
-                                ->schema([
-                                    TextEntry::make('code')->label('Code : ')
-                                        ->fontFamily(FontFamily::Mono)
-                                        ->inlineLabel(),
-                                    TextEntry::make('ammount')->label('Ammount : ')
-                                        ->numeric(
-                                            decimalPlaces: 0,
-                                            decimalSeparator: ',',
-                                            thousandsSeparator: '.',
-                                        )
-                                        ->formatStateUsing(fn ($state) => 'Rp. ' . number_format($state, 2, ', ', '.'))
-                                        ->inlineLabel(),
-                                    TextEntry::make('transaction_type.name')->label('Label : ')->inlineLabel(),
-                                    TextEntry::make('transaction_type.type')->label('Type : ')->inlineLabel()
-                                    ->badge()
-                                    ->icon(fn (Type $state) => match ($state) {
-                                        Type::in => 'heroicon-m-arrow-trending-up',
-                                        Type::out => 'heroicon-m-arrow-trending-down',
-                                    })
-                                    ->iconPosition(IconPosition::After)
-                                    ->color(fn (Type $state) => match ($state) {
-                                        Type::in => 'success',
-                                        Type::out => 'danger',
-                                    }),
-                                    TextEntry::make('note')->label('Note : ')->columnSpanFull(),
-                                    Fieldset::make('Date')
-                                    ->schema([
-                                        TextEntry::make('created_at')->dateTime()->inlineLabel(),
-                                        TextEntry::make('updated_at')->dateTime()->inlineLabel(),
-                                    ]),
-                                ])
-                                // ->contained(false)
-                                ->columns(2),
-                                Fieldset::make('Date')
-                                ->schema([
-                                    TextEntry::make('created_at')->dateTime(),
-                                    TextEntry::make('updated_at')->dateTime(),
-                                ]),
-                            ]),
-                        Tabs\Tab::make('Outcoming Transactions')
-                            ->icon('heroicon-m-arrow-trending-down')
-                            ->iconPosition(IconPosition::After)
-                            ->schema([
-                                RepeatableEntry::make('out_transactions')
-                                ->label('Transaction Logs')
-                                ->schema([
-                                    TextEntry::make('code')->label('Code : ')
-                                        ->fontFamily(FontFamily::Mono)
-                                        ->inlineLabel(),
-                                    TextEntry::make('ammount')->label('Ammount : ')
-                                        ->numeric(
-                                            decimalPlaces: 0,
-                                            decimalSeparator: ',',
-                                            thousandsSeparator: '.',
-                                        )
-                                        ->formatStateUsing(fn ($state) => 'Rp. ' . number_format($state, 2, ', ', '.'))
-                                        ->inlineLabel(),
-                                    TextEntry::make('transaction_type.name')->label('Label : ')->inlineLabel(),
-                                    TextEntry::make('transaction_type.type')->label('Type : ')->inlineLabel()
-                                    ->badge()
-                                    ->icon(fn (Type $state) => match ($state) {
-                                        Type::in => 'heroicon-m-arrow-trending-up',
-                                        Type::out => 'heroicon-m-arrow-trending-down',
-                                    })
-                                    ->iconPosition(IconPosition::After)
-                                    ->color(fn (Type $state) => match ($state) {
-                                        Type::in => 'success',
-                                        Type::out => 'danger',
-                                    }),
-                                    TextEntry::make('note')->label('Note : ')->columnSpanFull(),
-                                    Fieldset::make('Date')
-                                    ->schema([
-                                        TextEntry::make('created_at')->dateTime()->inlineLabel(),
-                                        TextEntry::make('updated_at')->dateTime()->inlineLabel(),
-                                    ]),
-                                ])
-                                // ->contained(false)
-                                ->columns(2),
-                                Fieldset::make('Date')
-                                ->schema([
-                                    TextEntry::make('created_at')->dateTime(),
-                                    TextEntry::make('updated_at')->dateTime(),
-                                ]),
-                            ]),
-                    ])
-                    ->activeTab(1)
-                    ->contained(false)
-                    ->columnSpanFull(),
-                ]),
+				Section::make('User Transaction History')
+				->description('History of detailed user log transactions')
+				->schema([
+					Tabs::make('Label')
+					->tabs([
+						Tabs\Tab::make('Incoming Transactions')
+							->icon('heroicon-m-arrow-trending-up')
+							->iconPosition(IconPosition::After)
+							// ->getEloquentQuery(fn (Builder $builder) => $builder->whereRelation('transaction_type', 'type', 'in'))
+							->schema([
+								RepeatableEntry::make('in_transactions')
+								->label('Transaction Logs')
+								->schema([
+									TextEntry::make('code')->label('Code : ')
+										->fontFamily(FontFamily::Mono)
+										->inlineLabel(),
+									TextEntry::make('ammount')->label('Ammount : ')
+										->numeric(
+											decimalPlaces: 0,
+											decimalSeparator: ',',
+											thousandsSeparator: '.',
+										)
+										->formatStateUsing(fn ($state) => 'Rp. ' . number_format($state, 2, ', ', '.'))
+										->inlineLabel()
+										->color('success'),
+									TextEntry::make('transaction_type.name')->label('Label : ')->inlineLabel(),
+									TextEntry::make('transaction_type.type')->label('Type : ')->inlineLabel()
+									->badge()
+									->icon(fn (Type $state) => match ($state) {
+										Type::in => 'heroicon-m-arrow-trending-up',
+										Type::out => 'heroicon-m-arrow-trending-down',
+									})
+									->iconPosition(IconPosition::After)
+									->color(fn (Type $state) => match ($state) {
+										Type::in => 'success',
+										Type::out => 'danger',
+									}),
+									TextEntry::make('note')->label('Note : ')->columnSpanFull(),
+									Fieldset::make('Date')
+									->schema([
+										TextEntry::make('created_at')->dateTime()->inlineLabel(),
+										TextEntry::make('updated_at')->dateTime()->inlineLabel(),
+									]),
+								])
+								// ->contained(false)
+								->columns(2),
+								Fieldset::make('Date')
+								->schema([
+									TextEntry::make('created_at')->dateTime(),
+									TextEntry::make('updated_at')->dateTime(),
+								]),
+							]),
+						Tabs\Tab::make('Outcoming Transactions')
+							->icon('heroicon-m-arrow-trending-down')
+							->iconPosition(IconPosition::After)
+							->schema([
+								RepeatableEntry::make('out_transactions')
+								->label('Transaction Logs')
+								->schema([
+									TextEntry::make('code')->label('Code : ')
+										->fontFamily(FontFamily::Mono)
+										->inlineLabel(),
+									TextEntry::make('ammount')->label('Ammount : ')
+										->numeric(
+											decimalPlaces: 0,
+											decimalSeparator: ',',
+											thousandsSeparator: '.',
+										)
+										->formatStateUsing(fn ($state) => 'Rp. ' . number_format($state, 2, ', ', '.'))
+										->inlineLabel()
+										->color('danger'),
+									TextEntry::make('transaction_type.name')->label('Label : ')->inlineLabel(),
+									TextEntry::make('transaction_type.type')->label('Type : ')->inlineLabel()
+									->badge()
+									->icon(fn (Type $state) => match ($state) {
+										Type::in => 'heroicon-m-arrow-trending-up',
+										Type::out => 'heroicon-m-arrow-trending-down',
+									})
+									->iconPosition(IconPosition::After)
+									->color(fn (Type $state) => match ($state) {
+										Type::in => 'success',
+										Type::out => 'danger',
+									}),
+									TextEntry::make('note')->label('Note : ')->columnSpanFull(),
+									Fieldset::make('Date')
+									->schema([
+										TextEntry::make('created_at')->dateTime()->inlineLabel(),
+										TextEntry::make('updated_at')->dateTime()->inlineLabel(),
+									]),
+								])
+								// ->contained(false)
+								->columns(2),
+								Fieldset::make('Date')
+								->schema([
+									TextEntry::make('created_at')->dateTime(),
+									TextEntry::make('updated_at')->dateTime(),
+								]),
+							]),
+					])
+					->activeTab(1)
+					->contained(false)
+					->columnSpanFull(),
+				]),
 			]);
 	}
 

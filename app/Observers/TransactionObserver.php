@@ -2,6 +2,7 @@
 
 namespace App\Observers;
 
+use App\Models\Scopes\IsActiveScope;
 use App\Models\Transaction;
 use App\Models\User;
 
@@ -13,7 +14,8 @@ class TransactionObserver
     public function created(Transaction $transaction): void
     {
         // Retrieve the user associated with the transaction
-        $user = $transaction->user;
+        // $user = $transaction->user;
+        $user = User::withoutGlobalScopes([IsActiveScope::class])->where('id', $transaction->user_id)->first();
 
         // dd($transaction->transaction_type->type->value);
         if($transaction->transaction_type->type->value == 'in')
