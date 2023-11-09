@@ -74,7 +74,7 @@ class Login extends BaseAuth
         }
 
         $user = Filament::auth()->user();
-        if (!$user->is_active || $user->is_reporter) {
+        if (!$user->is_active) {
             Filament::auth()->logout();
             $message = !$user->is_active ? 'These credentials is not active.' : 'These credentials is not an admin.';
             throw ValidationException::withMessages([

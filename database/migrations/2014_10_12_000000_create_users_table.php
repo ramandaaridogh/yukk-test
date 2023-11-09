@@ -18,7 +18,7 @@ return new class extends Migration
             $table->string('email')->unique();
             $table->string('password');
             $table->string('pin')->nullable();
-            $table->double('ammount_balance', 16, 2);
+            $table->double('ammount_balance', 16, 2)->default(0);
             $table->date('birth_date');
             $table->string('phone_number', 16)->unique();
             $table->enum('gender', ['M', 'F']);
