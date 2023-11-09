@@ -199,6 +199,12 @@ class TransactionSumByTypeBarChart extends ApexChartWidget
             ],
             'xaxis' => [
                 'categories' => ['January', 'Febuary', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
+                'axisBorder' => [
+                    'show' => false
+                ],
+                'axisTicks' => [
+                    'show' => false
+                ],
                 'labels' => [
                     'style' => [
                         'fontFamily' => 'inherit',
